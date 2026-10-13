@@ -60,6 +60,22 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "service uninstall failed: $($p.ExitCode)" }
           sc.exe query StrelaIndexer
           if (Test-Path "$env:ProgramFiles\Strela") { Get-ChildItem "$env:ProgramFiles\Strela" -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200; throw 'Program Files\Strela was left behind' }
+          # sc.exe returns 1060 for a service that is (rightly) gone; do not let that become the step's exit code
+          exit 0
+      # The USN journal followed live: create / rename / delete a file and watch the service-style indexer notice each.
+      - name: USN journal, live changes (scripts/admin-check.ps1)
+        if: always()
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $log = Join-Path $env:RUNNER_TEMP 'admin-check.log'
+          .\scriptsdmin-check.ps1 -Roots 'C:','D:' -Log $log
+          Get-Content $log
+          $t = Get-Content $log -Raw
+          if ($t -notmatch 'USN создание') { throw 'USN check did not run' }
+          if ($t -match '-1[.,]00 с' -or $t -match 'ТАЙМАУТ' -or $t -match 'ОШИБКА') { throw 'USN check failed' }
+          exit 0
       # Block cloning needs ReFS / Dev Drive. If the runner can make a ReFS volume, check the clone path for real;
       # if it cannot, this step is allowed to fail and the feature stays "implemented, not verified".
       - name: Block cloning on a ReFS volume
