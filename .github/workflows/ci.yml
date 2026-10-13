@@ -33,6 +33,7 @@ jobs:
       - name: Build
         run: cargo build --release
       - name: MFT scan of C:\ (read-only)
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -43,6 +44,7 @@ jobs:
           $r
           if (-not ($r -match 'System32\\notepad\.exe')) { throw 'System32\notepad.exe not found through the MFT index' }
       - name: Indexer service install, query, uninstall
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -61,6 +63,7 @@ jobs:
       # Block cloning needs ReFS / Dev Drive. If the runner can make a ReFS volume, check the clone path for real;
       # if it cannot, this step is allowed to fail and the feature stays "implemented, not verified".
       - name: Block cloning on a ReFS volume
+        timeout-minutes: 10
         shell: pwsh
         continue-on-error: true
         run: |

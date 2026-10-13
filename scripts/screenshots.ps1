@@ -5,15 +5,17 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\screenshots.ps1
 param(
     [string]$Out = 'docs\screenshots',
-    [string]$BackupDrive = 'F'     # a second drive for the transfer scene
+    [string]$DemoRoot = 'F:\Demo',          # where the invented tree is made (a short neutral path: it shows up in the screenshots)
+    [string]$DataRoot = 'F:\Demo-data',
+    [string]$BackupDrive = 'E'               # a slower drive for the transfer scene, so the progress is visible
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 $exe = Join-Path $repo 'target\release\Strela.exe'
 $cli = Join-Path $repo 'target\release\strela-cli.exe'
-$demo = Join-Path $env:TEMP 'strela-demo'
-$data = Join-Path $env:TEMP 'strela-demo-data'
+$demo = $DemoRoot
+$data = $DataRoot
 $backup = "${BackupDrive}:\Резерв-демо"
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
@@ -129,11 +131,9 @@ try {
     Start-Sleep 2
     Shot '03-cleanup'
 
-    Keys '^4' 400
-    Keys 'TODO' 200
-    Keys ('{TAB}' * 6) 200
-    Keys 'ext:rs;md' 200
-    Keys ('+{TAB}' * 6) 200
+    Cmd @('--cmd', 'find-content-here', '--', $demo)
+    Start-Sleep 1
+    Keys 'TODO' 300
     Keys '{ENTER}' 2500
     Shot '04-content'
 

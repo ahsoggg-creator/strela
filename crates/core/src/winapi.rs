@@ -26,7 +26,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::{
     DEVICE_SEEK_PENALTY_DESCRIPTOR, FSCTL_DUPLICATE_EXTENTS_TO_FILE, FSCTL_GET_NTFS_VOLUME_DATA,
-    FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL, FSCTL_SET_SPARSE, IOCTL_STORAGE_QUERY_PROPERTY, NTFS_VOLUME_DATA_BUFFER,
+    FSCTL_CREATE_USN_JOURNAL, FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL, FSCTL_SET_SPARSE, IOCTL_STORAGE_QUERY_PROPERTY, NTFS_VOLUME_DATA_BUFFER,
     PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceSeekPenaltyProperty,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -619,6 +619,42 @@ pub struct UsnJournal {
     pub first_usn: i64,
     pub next_usn: i64,
     pub lowest_valid: i64,
+}
+
+/// Creates the change journal of a volume that has none (32 MiB, grows by 8 MiB). Needs administrator rights; this
+/// is what search tools do on volumes where Windows did not enable the journal.
+pub fn create_usn_journal(volume: &File) -> io::Result<()> {
+    let mut input = [0u8; 16];
+    input[0..8].copy_from_slice(&(32u64 << 20).to_le_bytes());
+    input[8..16].copy_from_slice(&(8u64 << 20).to_le_bytes());
+    let mut ret = 0u32;
+    // SAFETY: handle valid; the input buffer is a live CREATE_USN_JOURNAL_DATA of 16 bytes.
+    let ok = unsafe {
+        DeviceIoControl(
+            volume.as_raw_handle(),
+            FSCTL_CREATE_USN_JOURNAL,
+            input.as_ptr() as *const c_void,
+            input.len() as u32,
+            std::ptr::null_mut(),
+            0,
+            &mut ret,
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
+}
+
+/// Queries the journal, creating it first when the volume has none.
+pub fn query_or_create_usn_journal(volume: &File) -> io::Result<UsnJournal> {
+    match query_usn_journal(volume) {
+        Ok(j) => Ok(j),
+        Err(e) if e.raw_os_error() == Some(1179) => {
+            // ERROR_JOURNAL_NOT_ACTIVE
+            create_usn_journal(volume)?;
+            query_usn_journal(volume)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 pub fn query_usn_journal(volume: &File) -> io::Result<UsnJournal> {

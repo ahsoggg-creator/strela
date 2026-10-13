@@ -71,6 +71,14 @@ pub struct Indexer {
     threads: Mutex<Vec<std::thread::JoinHandle<()>>>,
 }
 
+/// Diagnostics for support: `STRELA_DEBUG=1` prints indexer decisions to stderr.
+fn trace(msg: impl FnOnce() -> String) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("STRELA_DEBUG").is_some()) {
+        eprintln!("[indexer] {}", msg());
+    }
+}
+
 fn drive_of(root: &Path) -> Option<char> {
     let s = winapi::display_path(root);
     let b = s.as_bytes();
@@ -178,8 +186,19 @@ impl Indexer {
         for p in &self.shared.progress {
             p.cancel();
         }
-        for t in self.threads.lock().drain(..) {
-            let _ = t.join();
+        // A thread stuck in a system call must not keep the program from quitting: give them a few seconds, then
+        // carry on (the process exit ends whatever is left).
+        let threads: Vec<_> = self.threads.lock().drain(..).collect();
+        let deadline = Instant::now() + Duration::from_secs(8);
+        for t in threads {
+            while !t.is_finished() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            if t.is_finished() {
+                let _ = t.join();
+            } else {
+                trace(|| "an indexer thread did not stop in time".into());
+            }
         }
         save_now(&self.shared);
     }
@@ -233,6 +252,7 @@ fn run_root(sh: Arc<Shared>, i: usize) {
         sh.cfg.use_mft && winapi::volume_info(&root_path).is_ok_and(|v| v.is_ntfs()) && winapi::is_elevated()
     });
     let mut first = true;
+    let mut last_scan = Instant::now() - Duration::from_secs(3600);
     let mut seen_gen = sh.rescan_gen.load(Relaxed);
     while !sh.stop.load(Relaxed) {
         let has_snapshot = {
@@ -244,9 +264,19 @@ fn run_root(sh: Arc<Shared>, i: usize) {
             if first && has_snapshot == Some(VolumeKind::Mft) {
                 set_phase(&sh, i, Phase::Watching);
             } else {
+                // a journal that keeps failing must not turn into a scan loop
+                if last_scan.elapsed() < Duration::from_secs(60) {
+                    sleep_unless(&sh, 60_000);
+                    if sh.stop.load(Relaxed) {
+                        break;
+                    }
+                }
+                last_scan = Instant::now();
+                trace(|| format!("{root}: MFT scan"));
                 match scan_mft(&sh, i, drive, &root, &prog) {
-                    Ok(()) => {}
+                    Ok(()) => trace(|| format!("{root}: MFT scan done")),
                     Err(msg) => {
+                        trace(|| format!("{root}: MFT scan failed: {msg}"));
                         set_phase(&sh, i, Phase::Failed(msg));
                         sleep_unless(&sh, 5000);
                         continue;
@@ -258,8 +288,9 @@ fn run_root(sh: Arc<Shared>, i: usize) {
             let dirty = &sh.dirty;
             match usn::follow(drive, &root, &sh.index, st, &|| dirty.store(true, Relaxed)) {
                 usn::Outcome::Stopped => break,
-                usn::Outcome::NeedsRescan(_why) => {
-                    sh.index.write().volumes.retain(|v| v.root.to_lowercase() != root.to_lowercase());
+                // keep serving the old index until the next scan replaces it
+                usn::Outcome::NeedsRescan(why) => {
+                    trace(|| format!("{root}: journal says rescan: {why}"));
                     continue;
                 }
             }

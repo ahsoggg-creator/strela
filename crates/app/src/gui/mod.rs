@@ -179,6 +179,15 @@ impl App {
                     self.main_search.set_query(format!("path:\"{dir}\" "));
                     self.main_search.focus = true;
                 }
+                UiEvent::FindContentHere(p) => {
+                    if matches!(self.screen, Screen::Spotlight) {
+                        self.leave_spotlight(ctx, false);
+                    }
+                    self.hidden = false;
+                    self.tab = Tab::Content;
+                    self.content.root = strela_core::winapi::display_path(&p);
+                    self.content.want_focus = true;
+                }
                 UiEvent::LargestHere(p) => {
                     if matches!(self.screen, Screen::Spotlight) {
                         self.leave_spotlight(ctx, false);

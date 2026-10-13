@@ -167,7 +167,7 @@ fn main() {
             }
         });
     }
-    let needs_window = cmd.as_ref().is_none_or(|c| matches!(c.verb.as_str(), "open" | "spotlight" | "move-to" | "copy-to" | "fast-delete" | "recycle" | "find-here" | "largest-here"));
+    let needs_window = cmd.as_ref().is_none_or(|c| matches!(c.verb.as_str(), "open" | "spotlight" | "move-to" | "copy-to" | "fast-delete" | "recycle" | "find-here" | "find-content-here" | "largest-here"));
     let hidden = has(&args, "--hidden") || !needs_window;
     if let Some(c) = cmd {
         // the pipe server is already up: the command takes the same path as one from another process

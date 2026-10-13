@@ -121,7 +121,7 @@ pub fn follow(drive: char, root: &str, index: &SharedIndex, stop: &AtomicBool, o
         Ok(f) => f,
         Err(e) => return Outcome::NeedsRescan(format!("не удалось открыть том {drive}: {e}")),
     };
-    let journal = match winapi::query_usn_journal(&vol_file) {
+    let journal = match winapi::query_or_create_usn_journal(&vol_file) {
         Ok(j) => j,
         Err(e) => return Outcome::NeedsRescan(format!("журнал USN недоступен: {e}")),
     };

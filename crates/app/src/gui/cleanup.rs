@@ -139,7 +139,7 @@ impl CleanupTab {
             .map(|b| b.size)
             .sum();
         ui.label(theme::dim(ui, format!("Всего: {} файлов, {}", res.total_files, util::bytes(res.total_bytes))));
-        let bar_h = 46.0;
+        let bar_h = 78.0;
         let avail = ui.available_height() - bar_h - 8.0;
         ui.columns(2, |cols| {
             self.list(&mut cols[0], shared, icons, "Файлы", true, avail);

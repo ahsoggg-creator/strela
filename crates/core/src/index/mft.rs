@@ -215,7 +215,7 @@ fn skip_gap_bytes(drive: char) -> u64 {
 pub fn scan(drive: char, progress: &Progress) -> Result<(VolumeIndex, ScanStats)> {
     let t0 = Instant::now();
     let (file, info) = probe(drive)?;
-    let journal = winapi::query_usn_journal(&file).ok();
+    let journal = winapi::query_or_create_usn_journal(&file).ok();
     let (runs, real_size, bitmap) = mft_extents(&file, &info)?;
     let (bpc, rs) = (info.bytes_per_cluster, info.record_size);
     let total_records = real_size / rs as u64;

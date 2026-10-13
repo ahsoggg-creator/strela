@@ -183,13 +183,14 @@ pub fn menu_items(t: Target) -> Vec<(&'static str, &'static str, &'static str)> 
     const MOVE: (&str, &str, &str) = ("40moveto", "move-to", "Переместить на диск…");
     const DEL: (&str, &str, &str) = ("50fastdelete", "fast-delete", "Быстро удалить");
     const BIN: (&str, &str, &str) = ("60recycle", "recycle", "Удалить в корзину");
-    const FIND: (&str, &str, &str) = ("70find", "find-here", "Найти здесь");
+    const FIND: (&str, &str, &str) = ("70find", "find-here", "Найти здесь (по имени)");
+    const FIND_TEXT: (&str, &str, &str) = ("75findtext", "find-content-here", "Найти здесь (по содержимому)");
     const BIG: (&str, &str, &str) = ("80largest", "largest-here", "Самые большие файлы здесь");
     match t {
         Target::File => vec![COPY, CUT, MOVE, DEL, BIN],
-        Target::Folder => vec![COPY, CUT, PASTE, MOVE, DEL, BIN, FIND, BIG],
-        Target::Background => vec![PASTE, FIND, BIG],
-        Target::Drive => vec![PASTE, FIND, BIG],
+        Target::Folder => vec![COPY, CUT, PASTE, MOVE, DEL, BIN, FIND, FIND_TEXT, BIG],
+        Target::Background => vec![PASTE, FIND, FIND_TEXT, BIG],
+        Target::Drive => vec![PASTE, FIND, FIND_TEXT, BIG],
     }
 }
 

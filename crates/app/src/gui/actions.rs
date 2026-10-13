@@ -115,8 +115,11 @@ pub fn path_menu(ui: &mut Ui, shared: &Arc<Shared>, paths: &[PathBuf]) -> bool {
     }
     if is_dir {
         ui.separator();
-        if item(ui, "Найти здесь") {
+        if item(ui, "Найти здесь (по имени)") {
             run(shared, "find-here", paths);
+        }
+        if item(ui, "Найти здесь (по содержимому)") {
+            run(shared, "find-content-here", paths);
         }
         if item(ui, "Самые большие файлы здесь") {
             run(shared, "largest-here", paths);

@@ -43,6 +43,7 @@ pub enum UiEvent {
     PickDestination { paths: Vec<PathBuf>, op: Op },
     ConfirmDelete { paths: Vec<PathBuf>, recycle: bool },
     FindHere(PathBuf),
+    FindContentHere(PathBuf),
     LargestHere(PathBuf),
 }
 

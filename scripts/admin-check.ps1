@@ -21,21 +21,33 @@ if (-not $isAdmin) {
 }
 
 $ErrorActionPreference = 'Continue'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8   # strela-cli prints UTF-8; the default console code page would garble Cyrillic
+# Runs strela-cli with a time limit (a hung step must not hang the whole check); returns stdout + stderr.
+function Run-Cli([string[]]$CliArgs, [int]$Limit = 180) {
+    $o = Join-Path $env:TEMP 'strela-admin-o.txt'; $e = Join-Path $env:TEMP 'strela-admin-e.txt'
+    $quoted = ($CliArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    $env:STRELA_DEBUG = '1'
+    $p = Start-Process $cli -ArgumentList $quoted -PassThru -WindowStyle Hidden -RedirectStandardOutput $o -RedirectStandardError $e
+    if (-not $p.WaitForExit($Limit * 1000)) { $p | Stop-Process -Force; $t = "ТАЙМАУТ ($Limit с)`n" } else { $t = '' }
+    $t + (Get-Content $o -Raw -Encoding UTF8) + (Get-Content $e -Raw -Encoding UTF8)
+}
 function Say($m) { Write-Host $m; if ($Log) { Add-Content -LiteralPath $Log -Value $m -Encoding UTF8 } }
 $cli = Join-Path $repo 'target\release\strela-cli.exe'
 $exe = Join-Path $repo 'target\release\Strela.exe'
 if (-not $Roots.Count) { $Roots = @(Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -match '^[A-Z]:\\$' -and $_.Used -gt 0 } | ForEach-Object { $_.Root }) }
+trap { Say ("ОШИБКА: " + $_.Exception.Message + " at line " + $_.InvocationInfo.ScriptLineNumber); continue }
 Say "Strela admin check, $(Get-Date -Format 'yyyy-MM-dd HH:mm'), тома: $($Roots -join ' ')"
 
 # --- 1. MFT scan, one volume at a time
 $scratchRoot = $null
 foreach ($r in $Roots) {
     $idx = Join-Path $env:TEMP 'strela-admin-mft.bin'
-    $o = & $cli index --root $r --mft --index $idx 2>&1 | Out-String
+    $o = Run-Cli @('index', '--root', $r, '--mft', '--index', $idx)
     $line = ($o -split "`n" | Where-Object { $_ -match 'записей' } | Select-Object -First 1)
+    if (-not $line) { Say ("MFT  $r  нет строки результата, вывод:`n" + $o); continue }
     Say ("MFT  " + $line.Trim())
     if ($line -match 'MFT\+USN' -and -not $scratchRoot -and $r -eq [IO.Path]::GetPathRoot($repo)) { $scratchRoot = $r }
-    $s = & $cli search "ext:exe notepad" --root $r --mft --index $idx --time -n 3 2>&1 | Out-String
+    $s = Run-Cli @('search', 'ext:exe notepad', '--root', $r, '--mft', '--index', $idx, '--time', '-n', '3') 60
     $m = ($s -split "`n" | Where-Object { $_ -match 'совпадений' } | Select-Object -First 1)
     if ($m) { Say ("     поиск по индексу: " + $m.Trim()) }
     [IO.File]::Delete($idx)

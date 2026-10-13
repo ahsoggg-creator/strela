@@ -116,7 +116,7 @@ fn collector(shared: Arc<Shared>, rx: Receiver<Command>) {
     loop {
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(cmd) => {
-                let immediate = matches!(cmd.verb.as_str(), "spotlight" | "open" | "paste" | "find-here" | "largest-here");
+                let immediate = matches!(cmd.verb.as_str(), "spotlight" | "open" | "paste" | "find-here" | "find-content-here" | "largest-here");
                 if immediate {
                     if let Some((p, _)) = pending.take() {
                         execute(&shared, p);
@@ -193,6 +193,12 @@ pub fn execute(shared: &Arc<Shared>, cmd: Command) {
         "find-here" => {
             if let Some(p) = paths.into_iter().next() {
                 shared.push_event(UiEvent::FindHere(p));
+                shared.show_window();
+            }
+        }
+        "find-content-here" => {
+            if let Some(p) = paths.into_iter().next() {
+                shared.push_event(UiEvent::FindContentHere(p));
                 shared.show_window();
             }
         }
