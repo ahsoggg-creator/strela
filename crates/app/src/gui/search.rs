@@ -136,12 +136,13 @@ impl SearchPane {
         }
     }
 
-    /// Up/Down/PageUp/PageDown/Home/End; Enter opens, Ctrl+Enter shows the folder, Del / Shift+Del delete.
+    /// Up/Down/PageUp/PageDown/Ctrl+Home/Ctrl+End; Enter opens, Ctrl+Enter shows the folder. (No delete key here: the
+    /// search box keeps the focus, and a stray Delete must never remove a file.)
     /// Returns true when something was opened.
     pub fn keys(&mut self, ctx: &egui::Context) -> bool {
         let n = self.rows.len();
         let mut opened = false;
-        let (up, down, pgup, pgdn, home, end, enter, ctrl_enter, del, shift_del) = ctx.input_mut(|i| {
+        let (up, down, pgup, pgdn, home, end, enter, ctrl_enter) = ctx.input_mut(|i| {
             (
                 i.consume_key(Modifiers::NONE, Key::ArrowUp),
                 i.consume_key(Modifiers::NONE, Key::ArrowDown),
@@ -151,8 +152,6 @@ impl SearchPane {
                 i.consume_key(Modifiers::CTRL, Key::End),
                 i.consume_key(Modifiers::NONE, Key::Enter),
                 i.consume_key(Modifiers::CTRL, Key::Enter),
-                i.consume_key(Modifiers::NONE, Key::Delete),
-                i.consume_key(Modifiers::SHIFT, Key::Delete),
             )
         });
         if n > 0 {
@@ -185,13 +184,6 @@ impl SearchPane {
                 } else if enter {
                     actions::open_path(&r.path);
                     opened = true;
-                }
-                let paths = vec![PathBuf::from(&r.path)];
-                if shift_del {
-                    crate::commands::execute(&self.shared, crate::commands::Command { verb: "fast-delete".into(), paths: vec![r.path.clone()], dest: None });
-                } else if del && !ctx.egui_wants_keyboard_input() {
-                    let _ = paths;
-                    crate::commands::execute(&self.shared, crate::commands::Command { verb: "recycle".into(), paths: vec![r.path.clone()], dest: None });
                 }
             }
         }

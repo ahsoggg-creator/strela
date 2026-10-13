@@ -25,7 +25,34 @@ use super::{BLOCK, Ctx, RESUME_MIN};
 use crate::error::{Error, IoContext, Result};
 use crate::winapi::{self, FILE_FLAG_NO_BUFFERING, FILE_FLAG_SEQUENTIAL_SCAN, SHARE_ALL};
 
-const NBUF: usize = 4;
+/// Pipeline knobs. The defaults come from measurements (see docs/BENCHMARKS.md); `STRELA_TUNE` overrides them for
+/// experiments: `STRELA_TUNE=src=u,dst=b,block=8192,nbuf=4` (u = unbuffered, b = buffered; block in KiB).
+#[derive(Clone, Copy, Debug)]
+pub struct Tune {
+    pub src_unbuf: bool,
+    pub dst_unbuf: bool,
+    pub block: usize,
+    pub nbuf: usize,
+}
+
+pub fn tune() -> &'static Tune {
+    static T: std::sync::OnceLock<Tune> = std::sync::OnceLock::new();
+    T.get_or_init(|| {
+        let mut t = Tune { src_unbuf: true, dst_unbuf: true, block: BLOCK, nbuf: 4 };
+        if let Ok(v) = std::env::var("STRELA_TUNE") {
+            for kv in v.split(',') {
+                match kv.split_once('=') {
+                    Some(("src", x)) => t.src_unbuf = x == "u",
+                    Some(("dst", x)) => t.dst_unbuf = x == "u",
+                    Some(("block", x)) => t.block = x.parse::<usize>().map_or(BLOCK, |k| (k * 1024).next_multiple_of(ALIGN)),
+                    Some(("nbuf", x)) => t.nbuf = x.parse().unwrap_or(4).clamp(2, 64),
+                    _ => {}
+                }
+            }
+        }
+        t
+    })
+}
 /// Flush + persist the resume sidecar after this many bytes (a static so tests can shrink it).
 pub static SYNC_EVERY_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(256 << 20);
 const ERROR_INVALID_PARAMETER: i32 = 87;
@@ -103,11 +130,13 @@ pub fn copy_large(task: &FileTask, ctx: &Ctx) -> Result<()> {
 }
 
 fn copy_large_inner(task: &FileTask, ctx: &Ctx, unbuffered: bool) -> Result<()> {
-    let flags = if unbuffered { FILE_FLAG_NO_BUFFERING } else { 0 };
+    let t = *tune();
+    let src_flags = if unbuffered && t.src_unbuf { FILE_FLAG_NO_BUFFERING } else { 0 };
+    let dst_flags = if unbuffered && t.dst_unbuf { FILE_FLAG_NO_BUFFERING } else { 0 };
     let src = OpenOptions::new()
         .read(true)
         .share_mode(SHARE_ALL)
-        .custom_flags(flags | FILE_FLAG_SEQUENTIAL_SCAN)
+        .custom_flags(src_flags | FILE_FLAG_SEQUENTIAL_SCAN)
         .open(winapi::long_path(&task.src))
         .at(&task.src)?;
     let smeta = src.metadata().at(&task.src)?;
@@ -117,7 +146,7 @@ fn copy_large_inner(task: &FileTask, ctx: &Ctx, unbuffered: bool) -> Result<()> 
     let target = if use_part { part_path(&task.dst) } else { task.dst.clone() };
     let start = if use_part && ctx.opts.resume { resume_offset(task, size, &smeta) } else { 0 };
 
-    let dst = create_dst_with(&target, false, flags, start == 0).at(&target)?;
+    let dst = create_dst_with(&target, false, dst_flags, start == 0).at(&target)?;
     if start > 0 {
         dst.set_len(start).at(&target)?;
         ctx.prog.add_bytes(start);
@@ -127,10 +156,10 @@ fn copy_large_inner(task: &FileTask, ctx: &Ctx, unbuffered: bool) -> Result<()> 
     }
     let want_hash = ctx.verify.filter(|_| start == 0);
 
-    let (data_tx, data_rx) = crossbeam_channel::bounded::<Block>(NBUF);
-    let (free_tx, free_rx) = crossbeam_channel::bounded::<AlignedBuf>(NBUF);
-    for _ in 0..NBUF {
-        let _ = free_tx.send(AlignedBuf::new(BLOCK));
+    let (data_tx, data_rx) = crossbeam_channel::bounded::<Block>(t.nbuf);
+    let (free_tx, free_rx) = crossbeam_channel::bounded::<AlignedBuf>(t.nbuf);
+    for _ in 0..t.nbuf {
+        let _ = free_tx.send(AlignedBuf::new(t.block));
     }
 
     let mut inline_digest: Option<Digest> = None;
@@ -142,7 +171,7 @@ fn copy_large_inner(task: &FileTask, ctx: &Ctx, unbuffered: bool) -> Result<()> 
             let mut off = start;
             while off < size {
                 let Ok(mut buf) = free_rx.recv() else { break };
-                let want = (size - off).min(BLOCK as u64) as usize;
+                let want = (size - off).min(t.block as u64) as usize;
                 let padded = want.next_multiple_of(ALIGN);
                 let mut got = 0usize;
                 while got < want {

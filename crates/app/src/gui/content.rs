@@ -44,6 +44,7 @@ pub struct ContentTab {
     status: String,
     error: Option<String>,
     pub start_now: bool,
+    pub want_focus: bool,
 }
 
 impl ContentTab {
@@ -61,6 +62,7 @@ impl ContentTab {
             status: String::new(),
             error: None,
             start_now: false,
+            want_focus: true,
         }
     }
 
@@ -165,6 +167,10 @@ impl ContentTab {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let r = ui.add(egui::TextEdit::singleline(&mut self.pattern).hint_text("Что искать внутри файлов").desired_width(420.0).margin(vec2(10.0, 7.0)));
+                if self.want_focus {
+                    r.request_focus();
+                    self.want_focus = false;
+                }
                 if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                     self.start(shared, ui.ctx());
                 }

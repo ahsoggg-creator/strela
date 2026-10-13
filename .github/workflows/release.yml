@@ -12,6 +12,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Rust stable
+        run: rustup toolchain install stable --profile minimal --component clippy --no-self-update && rustup default stable
       - uses: Swatinem/rust-cache@v2
       - name: Build, test, package
         shell: pwsh

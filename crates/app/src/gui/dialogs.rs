@@ -124,7 +124,7 @@ impl DeleteDialog {
                     theme::card(ui).show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         ui.horizontal(|ui| {
-                            for (n, label) in [(pv.files, "файлов"), (pv.dirs, "папок")] {
+                            for (n, label) in [(pv.files, util::plural(pv.files, "файл", "файла", "файлов")), (pv.dirs, util::plural(pv.dirs, "папка", "папки", "папок"))] {
                                 ui.vertical(|ui| {
                                     ui.label(RichText::new(n.to_string()).size(24.0).strong());
                                     ui.label(theme::dim(ui, label));

@@ -305,14 +305,14 @@ fn exec_file(task: &FileTask, ctx: &Ctx) -> Result<Outcome> {
     ctx.ctrl.check()?;
     ctx.prog.set_current(&task.src);
     let opts = ctx.opts;
-    if let Ok(dm) = std::fs::symlink_metadata(&task.dst) {
+    if let Ok(dm) = std::fs::symlink_metadata(winapi::long_path(&task.dst)) {
         if dm.is_dir() {
             return Err(Error::At {
                 path: task.dst.clone(),
                 source: std::io::Error::other("на месте файла уже есть папка"),
             });
         }
-        let sm = std::fs::metadata(&task.src).at(&task.src)?;
+        let sm = std::fs::metadata(winapi::long_path(&task.src)).at(&task.src)?;
         let skip = match opts.overwrite {
             Overwrite::Skip => true,
             Overwrite::Newer => matches!((sm.modified(), dm.modified()), (Ok(s), Ok(d)) if s <= d),
@@ -377,8 +377,8 @@ fn instant_move(src: &Path, dest_dir: &Path, opts: &Options, report: &mut Report
 
 /// Renames `src` to `dst` on one volume; merges directories that already exist at the destination.
 fn move_in_volume(src: &Path, dst: &Path, opts: &Options, report: &mut Report) -> Result<()> {
-    let smeta = std::fs::symlink_metadata(src).at(src)?;
-    match std::fs::symlink_metadata(dst) {
+    let smeta = std::fs::symlink_metadata(winapi::long_path(src)).at(src)?;
+    match std::fs::symlink_metadata(winapi::long_path(dst)) {
         Err(_) => {
             winapi::move_file_ex(src, dst, false).at(src)?;
             report.instant_moves += 1;
@@ -386,11 +386,11 @@ fn move_in_volume(src: &Path, dst: &Path, opts: &Options, report: &mut Report) -
         }
         Ok(dmeta) => {
             if smeta.is_dir() && dmeta.is_dir() {
-                let entries: Vec<_> = std::fs::read_dir(src).at(src)?.collect::<std::io::Result<_>>().at(src)?;
+                let entries: Vec<_> = std::fs::read_dir(winapi::long_path(src)).at(src)?.collect::<std::io::Result<_>>().at(src)?;
                 for e in entries {
                     move_in_volume(&e.path(), &dst.join(e.file_name()), opts, report)?;
                 }
-                let _ = std::fs::remove_dir(src);
+                let _ = std::fs::remove_dir(winapi::long_path(src));
                 return Ok(());
             }
             if smeta.is_dir() != dmeta.is_dir() {

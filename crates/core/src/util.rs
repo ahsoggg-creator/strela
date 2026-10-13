@@ -15,6 +15,18 @@ pub fn data_dir() -> PathBuf {
         .join("Strela")
 }
 
+/// Russian plural: `plural(1, "файл", "файла", "файлов")` -> `файл`, 2 -> `файла`, 5 -> `файлов`, 21 -> `файл`.
+pub fn plural(n: u64, one: &'static str, few: &'static str, many: &'static str) -> &'static str {
+    let (m10, m100) = (n % 10, n % 100);
+    if m10 == 1 && m100 != 11 {
+        one
+    } else if (2..=4).contains(&m10) && !(12..=14).contains(&m100) {
+        few
+    } else {
+        many
+    }
+}
+
 /// `1.5 ГБ`, `312 КБ`, `17 Б`.
 pub fn bytes(n: u64) -> String {
     const UNITS: [&str; 5] = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
@@ -80,6 +92,12 @@ pub fn date_utc(unix: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn russian_plurals() {
+        let p = |n| plural(n, "файл", "файла", "файлов");
+        assert_eq!([p(0), p(1), p(2), p(4), p(5), p(11), p(12), p(21), p(22), p(25), p(101), p(111)], ["файлов", "файл", "файла", "файла", "файлов", "файлов", "файлов", "файл", "файла", "файлов", "файл", "файлов"]);
+    }
 
     #[test]
     fn formats() {

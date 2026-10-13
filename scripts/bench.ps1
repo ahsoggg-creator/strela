@@ -248,13 +248,15 @@ function Search-Scenario {
 New-Item -ItemType Directory -Force $NvmeA, $NvmeB | Out-Null
 try {
     if ($Only -contains 'big') {
-        Big-Scenario $NvmeA $NvmeB "Один файл $BigMB МБ: NVMe → NVMe"
+        # The destination of the big-file runs is the second NVMe disk: it is the one whose write speed stays stable between runs
+        # (the system disk, with little free space, swings by 3x from run to run, which would drown any difference between tools).
+        Big-Scenario $NvmeB $NvmeA "Один файл $BigMB МБ: NVMe (C:) → NVMe (F:)"
         if (-not $SkipSata) {
             New-Item -ItemType Directory -Force $Sata | Out-Null
-            Big-Scenario $Sata $NvmeA "Один файл $BigMB МБ: SATA SSD → NVMe"
+            Big-Scenario $Sata $NvmeA "Один файл $BigMB МБ: SATA SSD (E:) → NVMe (F:)"
         }
     }
-    if ($Only -contains 'small') { Small-Scenario $NvmeA $NvmeB "$SmallCount мелких файлов: NVMe → NVMe" }
+    if ($Only -contains 'small') { Small-Scenario $NvmeA $NvmeB "$SmallCount мелких файлов: NVMe (F:) → NVMe (C:)" }
     if ($Only -contains 'move') { Move-Scenario $NvmeA }
     if ($Only -contains 'delete') { Delete-Scenario $NvmeA }
     if ($Only -contains 'search') { Search-Scenario }

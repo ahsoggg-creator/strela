@@ -380,9 +380,10 @@ fn transfer_cmd(op: Op, a: TransferArgs) -> Res {
     let rep = rep?;
     let secs = t0.elapsed().as_secs_f64();
     println!(
-        "готово за {:.2} с: {} файлов, {} ({}); пропущено {}; ошибок {}",
+        "готово за {:.2} с: {} {}, {} ({}); пропущено {}; ошибок {}",
         secs,
         rep.files_copied,
+        util::plural(rep.files_copied, "файл", "файла", "файлов"),
         util::bytes(rep.bytes),
         util::speed(if secs > 0.0 { rep.bytes as f64 / secs } else { 0.0 }),
         rep.files_skipped,
@@ -422,10 +423,12 @@ fn delete_cmd(paths: Vec<PathBuf>, recycle: bool, yes: bool, type_name: Option<S
     let prog = Progress::default();
     let pv = delete::preview(&paths, &guard, &prog)?;
     println!(
-        "К удалению ({}): {} файлов, {} папок, {}{}",
+        "К удалению ({}): {} {}, {} {}, {}{}",
         if recycle { "в корзину" } else { "БЕЗВОЗВРАТНО" },
         pv.files,
+        util::plural(pv.files, "файл", "файла", "файлов"),
         pv.dirs,
+        util::plural(pv.dirs, "папка", "папки", "папок"),
         util::bytes(pv.bytes),
         if pv.links > 0 { format!(", ссылок {} (удаляются сами ссылки)", pv.links) } else { String::new() }
     );
@@ -444,10 +447,12 @@ fn delete_cmd(paths: Vec<PathBuf>, recycle: bool, yes: bool, type_name: Option<S
     let confirmed = pv.confirm(typed.as_deref())?;
     let rep = if recycle { delete::delete_to_recycle_bin(&confirmed)? } else { delete::delete_permanently(&confirmed, &Progress::default())? };
     println!(
-        "удалено за {:.2} с: {} файлов, {} папок, {}",
+        "удалено за {:.2} с: {} {}, {} {}, {}",
         rep.elapsed.as_secs_f64(),
         rep.files,
+        util::plural(rep.files, "файл", "файла", "файлов"),
         rep.dirs,
+        util::plural(rep.dirs, "папка", "папки", "папок"),
         util::bytes(rep.bytes)
     );
     for (p, m) in rep.failed.iter().take(20) {

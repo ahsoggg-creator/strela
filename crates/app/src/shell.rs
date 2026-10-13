@@ -515,6 +515,18 @@ pub fn force_foreground(hwnd: HWND) {
 pub fn show_main(sh: &Shared) {
     let h = main_hwnd(sh);
     if h == 0 {
+        // The window does not exist yet (the command arrived while the program was still starting): try again shortly.
+        if let Some(s) = SHARED.get().cloned() {
+            std::thread::spawn(move || {
+                for _ in 0..50 {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    if main_hwnd(&s) != 0 {
+                        show_main(&s);
+                        return;
+                    }
+                }
+            });
+        }
         return;
     }
     let hwnd = hwnd_of(h);

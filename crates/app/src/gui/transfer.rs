@@ -295,7 +295,7 @@ fn job_card(ui: &mut Ui, shared: &Arc<Shared>, job: &JobInfo) {
                 }
                 JobState::Done | JobState::DoneWithErrors => {
                     if let Some(r) = &job.report {
-                        let mut line = format!("{} файлов, {} за {}", r.files_copied, util::bytes(r.bytes), util::clock(r.elapsed));
+                        let mut line = format!("{} {}, {} за {}", r.files_copied, util::plural(r.files_copied, "файл", "файла", "файлов"), util::bytes(r.bytes), util::clock(r.elapsed));
                         if r.files_skipped > 0 {
                             line += &format!(" · пропущено {}", r.files_skipped);
                         }

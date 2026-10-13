@@ -26,7 +26,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::{
     DEVICE_SEEK_PENALTY_DESCRIPTOR, FSCTL_DUPLICATE_EXTENTS_TO_FILE, FSCTL_GET_NTFS_VOLUME_DATA,
-    FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL, IOCTL_STORAGE_QUERY_PROPERTY, NTFS_VOLUME_DATA_BUFFER,
+    FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL, FSCTL_SET_SPARSE, IOCTL_STORAGE_QUERY_PROPERTY, NTFS_VOLUME_DATA_BUFFER,
     PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceSeekPenaltyProperty,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -228,6 +228,16 @@ pub fn disk_space(path: &Path) -> Option<(u64, u64)> {
     // SAFETY: `w` is NUL-terminated; out-pointers reference live locals.
     let ok = unsafe { GetDiskFreeSpaceExW(w.as_ptr(), &mut avail, &mut total, &mut free) };
     (ok != 0 && total > 0).then_some((total, avail))
+}
+
+/// Marks a file sparse (holes take no disk space). Used to make big demo files for screenshots.
+pub fn set_sparse(file: &File) -> io::Result<()> {
+    let mut ret = 0u32;
+    // SAFETY: handle valid; no input or output buffers are needed for FSCTL_SET_SPARSE.
+    let ok = unsafe {
+        DeviceIoControl(file.as_raw_handle(), FSCTL_SET_SPARSE, std::ptr::null(), 0, std::ptr::null_mut(), 0, &mut ret, std::ptr::null_mut())
+    };
+    if ok == 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
 }
 
 /// Puts the calling thread into background mode: lower CPU priority and, more importantly, low I/O priority.

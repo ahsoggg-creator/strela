@@ -29,6 +29,12 @@ enum B {
         #[arg(long, default_value_t = 1)]
         seed: u64,
     },
+    /// Разреженный файл заданной длины (для демонстрационных скриншотов: места на диске почти не занимает)
+    GenSparse {
+        path: PathBuf,
+        #[arg(long)]
+        mb: u64,
+    },
     /// Дерево мелких файлов
     GenSmall {
         dir: PathBuf,
@@ -82,6 +88,15 @@ pub fn run(b: BenchCmd) -> Res {
     match b.cmd {
         B::GenBig { path, mb, seed } => gen_big(path, mb, seed),
         B::GenSmall { dir, count, dirs, seed } => gen_small(dir, count, dirs, seed),
+        B::GenSparse { path, mb } => {
+            if let Some(p) = path.parent() {
+                std::fs::create_dir_all(p)?;
+            }
+            let f = OpenOptions::new().write(true).create(true).truncate(true).open(&path)?;
+            strela_core::winapi::set_sparse(&f)?;
+            f.set_len(mb << 20)?;
+            Ok(())
+        }
         B::ShellCopy { src, dest_dir } => shell(Shell::Copy, &src, &dest_dir),
         B::ShellMove { src, dest_dir } => shell(Shell::Move, &src, &dest_dir),
         B::ShellDelete { path } => shell(Shell::Delete, &path, &path),

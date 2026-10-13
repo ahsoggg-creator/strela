@@ -222,7 +222,9 @@ mod tests {
         if let Some(p) = std::env::var_os("ProgramFiles") {
             assert!(g.check(Path::new(&p)).is_some());
         }
-        // 8.3 form of Program Files resolves to the same folder
-        assert!(g.check(Path::new(r"C:\PROGRA~1")).is_some());
+        // 8.3 form of Program Files resolves to the same folder (only where short names exist on this volume)
+        if Path::new(r"C:\PROGRA~1").exists() {
+            assert!(g.check(Path::new(r"C:\PROGRA~1")).is_some());
+        }
     }
 }

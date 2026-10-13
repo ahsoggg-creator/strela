@@ -397,7 +397,7 @@ impl App {
                 }
                 if n > 0 {
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                        ui.label(theme::dim(ui, format!("Enter — открыть · Ctrl+Enter — папка · Del — в корзину · ПКМ — действия Strela · {}", self.spot_search.summary())));
+                        ui.label(theme::dim(ui, format!("Enter — открыть · Ctrl+Enter — папка · ПКМ — действия Strela · {}", self.spot_search.summary())));
                     });
                 }
             });
@@ -536,6 +536,7 @@ impl eframe::App for App {
         if self.prev_tab != Some(self.tab) {
             self.prev_tab = Some(self.tab);
             self.focus_search_on_tab = self.tab == Tab::Search;
+            self.content.want_focus = self.tab == Tab::Content;
         }
         let stamp: u64 = self.status.lock().unwrap().roots.iter().map(|r| r.entries as u64).sum();
         if stamp != self.index_stamp {
