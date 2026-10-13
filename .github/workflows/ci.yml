@@ -70,7 +70,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           $log = Join-Path $env:RUNNER_TEMP 'admin-check.log'
-          .\scriptsdmin-check.ps1 -Roots 'C:','D:' -Log $log
+          .\scripts\admin-check.ps1 -Roots 'C:\','D:\' -Log $log
           Get-Content $log
           $t = Get-Content $log -Raw
           if ($t -notmatch 'USN создание') { throw 'USN check did not run' }
