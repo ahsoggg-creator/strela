@@ -352,8 +352,10 @@ fn transfer_cmd(op: Op, a: TransferArgs) -> Res {
     let rep = std::thread::scope(|s| {
         let h = s.spawn(|| transfer::run(&spec, &guard, &ctrl, &prog));
         let tty = std::io::stderr().is_terminal() && !a.quiet;
+        let mut last_draw = Instant::now() - Duration::from_secs(1);
         while !h.is_finished() {
-            if tty {
+            if tty && last_draw.elapsed() >= Duration::from_millis(200) {
+                last_draw = Instant::now();
                 let p = prog.snapshot();
                 let pct = if p.bytes_total > 0 { p.bytes_done as f64 * 100.0 / p.bytes_total as f64 } else { 0.0 };
                 let filled = (pct / 100.0 * 24.0) as usize;
@@ -368,7 +370,7 @@ fn transfer_cmd(op: Op, a: TransferArgs) -> Res {
                     p.eta.map_or("--".into(), util::clock)
                 );
             }
-            std::thread::sleep(Duration::from_millis(200));
+            std::thread::sleep(Duration::from_millis(5));
         }
         if tty {
             eprint!("\r{:100}\r", "");

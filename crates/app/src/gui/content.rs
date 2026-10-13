@@ -346,7 +346,13 @@ fn candidates(sh: &Arc<Shared>, root: &str, filter: &str, progress: &Progress) -
         })
     };
     if root.is_empty() {
-        let (files, _) = sh.backend.files(filter, 2_000_000)?;
+        if filter.trim().is_empty() {
+            return Err("Укажите папку или фильтр имён (например ext:rs) — иначе придётся читать все файлы всех дисков".into());
+        }
+        let (files, truncated) = sh.backend.files(filter, 1_000_000)?;
+        if truncated {
+            return Err("Слишком много файлов подходит под фильтр: сузьте его или укажите папку".into());
+        }
         return Ok(files);
     }
     if covered(root) {

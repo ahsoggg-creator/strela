@@ -355,7 +355,7 @@ mod tests {
         std::fs::create_dir_all(root.join("sub")).unwrap();
         std::fs::write(root.join("sub/Отчёт-2024.txt"), b"x").unwrap();
         std::fs::write(root.join("big.bin"), vec![0u8; 5000]).unwrap();
-        let cfg = Config { data_file: tmp.path().join("ix.bin"), roots: vec![root.clone()], use_mft: false, save_interval: Duration::from_secs(3600) };
+        let cfg = Config { data_file: tmp.path().join("ix.bin"), roots: vec![root.clone()], use_mft: false, save_interval: Duration::from_secs(3600), background: false };
         let ix = Arc::new(Indexer::start(cfg));
         let t = Instant::now();
         while !ix.is_ready() && t.elapsed() < Duration::from_secs(20) {

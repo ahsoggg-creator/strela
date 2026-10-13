@@ -39,6 +39,8 @@ pub struct Config {
     /// Use `$MFT` + USN where possible (needs administrator rights / the service).
     pub use_mft: bool,
     pub save_interval: Duration,
+    /// Scans run with low CPU / I/O priority (the GUI); the CLI wants full speed.
+    pub background: bool,
 }
 
 impl Config {
@@ -49,6 +51,7 @@ impl Config {
             roots: winapi::drive_letters(false).into_iter().map(|d| PathBuf::from(format!("{d}:\\"))).collect(),
             use_mft,
             save_interval: Duration::from_secs(300),
+            background: false,
         }
     }
 }
@@ -332,7 +335,7 @@ fn scan_walk(sh: &Shared, i: usize, root_path: &Path, root: &str, prog: &Arc<Pro
     let t = Instant::now();
     prog.items.store(0, Relaxed);
     prog.total.store(0, Relaxed);
-    let vol = walk::scan_root(root_path, prog).map_err(|e| e.to_string())?;
+    let vol = walk::scan_root_with(root_path, prog, sh.cfg.background).map_err(|e| e.to_string())?;
     sh.index.write().set_volume(vol);
     sh.dirty.store(true, Relaxed);
     let mut st = sh.status.lock();
@@ -371,7 +374,7 @@ mod tests {
         std::fs::create_dir_all(root.join("sub")).unwrap();
         std::fs::write(root.join("sub/alpha.txt"), b"1").unwrap();
         let snap = dir.path().join("index.bin");
-        let cfg = Config { data_file: snap.clone(), roots: vec![root.clone()], use_mft: false, save_interval: Duration::from_secs(3600) };
+        let cfg = Config { data_file: snap.clone(), roots: vec![root.clone()], use_mft: false, save_interval: Duration::from_secs(3600), background: false };
 
         let ix = Indexer::start(cfg.clone());
         wait_ready(&ix);

@@ -1,0 +1,24 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build, test, package
+        shell: pwsh
+        run: .\scripts\release.ps1
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist\Strela-Setup.exe dist\Strela.exe dist\strela-cli.exe dist\SHA256SUMS.txt --title "Strela ${{ github.ref_name }}" --notes-file docs\RELEASE_NOTES.md

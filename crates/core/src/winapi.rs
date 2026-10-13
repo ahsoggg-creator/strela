@@ -230,6 +230,14 @@ pub fn disk_space(path: &Path) -> Option<(u64, u64)> {
     (ok != 0 && total > 0).then_some((total, avail))
 }
 
+/// Puts the calling thread into background mode: lower CPU priority and, more importantly, low I/O priority.
+pub fn lower_current_thread_priority() {
+    use windows_sys::Win32::System::Threading::{GetCurrentThread, SetThreadPriority};
+    const THREAD_MODE_BACKGROUND_BEGIN: i32 = 0x0001_0000;
+    // SAFETY: operates on the calling thread's pseudo handle.
+    unsafe { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) };
+}
+
 /// Unix seconds -> local `(year, month, day, hour, minute)` using the machine's time zone rules for that date.
 pub fn unix_to_local(unix: u32) -> Option<(u16, u16, u16, u16, u16)> {
     use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};

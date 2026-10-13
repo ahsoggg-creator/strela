@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release
+      - name: Test
+        run: cargo test --workspace --release
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # The runner is an elevated administrator on a real NTFS volume: the only place where the MFT / USN path and the
+  # Windows service are exercised for real (they need administrator rights; the unit tests use synthetic records).
+  integration:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release
+      - name: MFT scan of C:\ (read-only)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = .\target\release\strela-cli.exe index --root C:\ --mft --index "$env:RUNNER_TEMP\mft.bin"
+          $out
+          if (-not ($out -match 'MFT\+USN')) { throw 'the MFT backend was not used' }
+          $r = .\target\release\strela-cli.exe search "notepad.exe" --root C:\ --mft --index "$env:RUNNER_TEMP\mft.bin" --time 2>&1
+          $r
+          if (-not ($r -match 'System32\\notepad\.exe')) { throw 'System32\notepad.exe not found through the MFT index' }
+      - name: Indexer service install, query, uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $exe = ".\target\release\Strela.exe"
+          $p = Start-Process $exe -ArgumentList '--install-service' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "service install failed: $($p.ExitCode)" }
+          sc.exe query StrelaIndexer
+          Start-Sleep 20
+          $r = .\target\release\strela-cli.exe search "notepad.exe" --service --time 2>&1
+          $r
+          if (-not ($r -match 'notepad\.exe')) { throw 'service did not answer' }
+          $p = Start-Process $exe -ArgumentList '--uninstall-service' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "service uninstall failed: $($p.ExitCode)" }
+          sc.exe query StrelaIndexer
+          if (Test-Path "$env:ProgramFiles\Strela") { throw 'Program Files\Strela was left behind' }
+      # Block cloning needs ReFS / Dev Drive. If the runner can make a ReFS volume, check the clone path for real;
+      # if it cannot, this step is allowed to fail and the feature stays "implemented, not verified".
+      - name: Block cloning on a ReFS volume
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $vhd = Join-Path $env:RUNNER_TEMP 'refs.vhdx'
+          $script = @(
+            "create vdisk file=`"$vhd`" maximum=4096 type=expandable",
+            'attach vdisk',
+            'create partition primary',
+            'format fs=refs quick label=StrelaReFS',
+            'assign letter=R'
+          )
+          $dp = Join-Path $env:RUNNER_TEMP 'dp.txt'
+          Set-Content $dp $script -Encoding ascii
+          diskpart /s $dp
+          fsutil fsinfo volumeinfo R:\
+          .\target\release\strela-cli.exe bench gen-big R:\src\big.bin --mb 512
+          $out = .\target\release\strela-cli.exe copy R:\src\big.bin R:\dst
+          $out
+          if (-not ($out -match 'клонирование блоков')) { throw 'block cloning was not used' }
+          $a = (Get-Item R:\src\big.bin).Length; $b = (Get-Item R:\dst\big.bin).Length
+          if ($a -ne $b) { throw "sizes differ: $a vs $b" }

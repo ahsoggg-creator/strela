@@ -94,8 +94,14 @@ fn walk_dir<'s, 'a: 's>(scope: &rayon::Scope<'s>, ctx: &'s Ctx<'a>, dir: PathBuf
     }
 }
 
-/// Walks `root` (a drive root or any folder) in parallel.
+/// Walks `root` (a drive root or any folder) in parallel at normal priority.
 pub fn scan_root(root: &Path, progress: &Progress) -> Result<VolumeIndex> {
+    scan_root_with(root, progress, false)
+}
+
+/// `background = true` runs the walk with low CPU and I/O priority, so a re-scan at program start does not get in
+/// the way of whatever the user is doing (an HDD walk takes minutes).
+pub fn scan_root_with(root: &Path, progress: &Progress, background: bool) -> Result<VolumeIndex> {
     let root_str = crate::winapi::display_path(root);
     let meta = std::fs::metadata(root).map_err(|e| Error::At { path: root.to_path_buf(), source: e })?;
     if !meta.is_dir() {
@@ -104,6 +110,11 @@ pub fn scan_root(root: &Path, progress: &Progress) -> Result<VolumeIndex> {
     let threads = (std::thread::available_parallelism().map_or(4, |n| n.get()) * 2).clamp(4, 32);
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
+        .start_handler(move |_| {
+            if background {
+                crate::winapi::lower_current_thread_priority();
+            }
+        })
         .build()
         .map_err(|e| Error::Unsupported(e.to_string()))?;
     let (tx, rx) = channel();

@@ -4,7 +4,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// `%LOCALAPPDATA%\Strela` — settings, saved index, job queue. Created on demand by the callers.
+/// The `STRELA_DATA_DIR` environment variable overrides it (tests, screenshots, portable use).
 pub fn data_dir() -> PathBuf {
+    if let Some(d) = std::env::var_os("STRELA_DATA_DIR").filter(|d| !d.is_empty()) {
+        return PathBuf::from(d);
+    }
     std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)

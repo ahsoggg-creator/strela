@@ -46,6 +46,8 @@ enum B {
     ShellDelete { path: PathBuf },
     /// Чистый CopyFile2 для одного файла (без нашего конвейера)
     Cf2 { src: PathBuf, dst: PathBuf },
+    /// Сбрасывает на диск (FlushFileBuffers) записанный файл: чтобы замеры учитывали и отложенную запись
+    Flush { path: PathBuf },
     /// Число файлов и суммарный размер папки (для проверки результатов копирования)
     Count { dir: PathBuf },
     /// Показывает контекстное меню так, как его строит Проводник (проверка регистрации «Strela ▸»)
@@ -84,6 +86,10 @@ pub fn run(b: BenchCmd) -> Res {
         B::ShellMove { src, dest_dir } => shell(Shell::Move, &src, &dest_dir),
         B::ShellDelete { path } => shell(Shell::Delete, &path, &path),
         B::MenuDump { path, background } => menu_dump(&path, background),
+        B::Flush { path } => {
+            std::fs::OpenOptions::new().write(true).open(&path)?.sync_all()?;
+            Ok(())
+        }
         B::Count { dir } => {
             let (mut files, mut bytes, mut dirs) = (0u64, 0u64, 0u64);
             let mut stack = vec![dir];

@@ -84,6 +84,7 @@ impl Backend {
             let roots = self.roots.lock().unwrap().clone();
             let data = strela_core::util::data_dir().join("index.bin");
             let mut cfg = Config::all_fixed_drives(data, strela_core::winapi::is_elevated());
+            cfg.background = true;
             if !roots.is_empty() {
                 cfg.roots = roots.into_iter().map(PathBuf::from).collect();
             }
