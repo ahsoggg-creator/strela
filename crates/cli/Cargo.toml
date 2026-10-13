@@ -1,0 +1,16 @@
+[package]
+name = "strela-cli"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/ahsoggg-creator/strela"
+
+[[bin]]
+name = "strela-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+rayon = "1.12.0"
+strela-core = { version = "0.1.0", path = "../core" }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_System_Com", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }

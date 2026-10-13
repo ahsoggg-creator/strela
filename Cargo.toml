@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/cli", "crates/app"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
