@@ -148,10 +148,20 @@ pub fn uninstall_elevated() -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(500));
         let dir = program_files_dir();
-        if dir.exists() {
-            std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        // The service process may still be finishing (it writes its index while stopping): try for a few seconds.
+        for attempt in 0..20 {
+            if !dir.exists() {
+                return Ok(());
+            }
+            match std::fs::remove_dir_all(&dir) {
+                Ok(()) if !dir.exists() => return Ok(()),
+                Ok(()) => {}
+                Err(e) if attempt == 19 => return Err(format!("{}: {e}", dir.display())),
+                Err(_) => {}
+            }
+            std::thread::sleep(Duration::from_millis(300));
         }
-        Ok(())
+        if dir.exists() { Err(format!("{} не удалена", dir.display())) } else { Ok(()) }
     };
     let r = run();
     if let Err(e) = &r {

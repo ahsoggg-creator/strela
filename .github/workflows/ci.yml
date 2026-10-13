@@ -59,10 +59,11 @@ jobs:
           $p = Start-Process $exe -ArgumentList '--uninstall-service' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "service uninstall failed: $($p.ExitCode)" }
           sc.exe query StrelaIndexer
-          if (Test-Path "$env:ProgramFiles\Strela") { throw 'Program Files\Strela was left behind' }
+          if (Test-Path "$env:ProgramFiles\Strela") { Get-ChildItem "$env:ProgramFiles\Strela" -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200; throw 'Program Files\Strela was left behind' }
       # Block cloning needs ReFS / Dev Drive. If the runner can make a ReFS volume, check the clone path for real;
       # if it cannot, this step is allowed to fail and the feature stays "implemented, not verified".
       - name: Block cloning on a ReFS volume
+        if: always()
         timeout-minutes: 10
         shell: pwsh
         continue-on-error: true
