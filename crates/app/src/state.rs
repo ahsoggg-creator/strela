@@ -18,11 +18,21 @@ pub enum Tab {
     Transfer,
     Cleanup,
     Content,
+    Programs,
+    Startup,
+    Processes,
     Settings,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [Tab::Search, Tab::Transfer, Tab::Cleanup, Tab::Content, Tab::Settings];
+    pub const ALL: [Tab; 8] = [Tab::Search, Tab::Transfer, Tab::Cleanup, Tab::Content, Tab::Programs, Tab::Startup, Tab::Processes, Tab::Settings];
+
+    /// The tabs of the administrator window: it only hosts the system tools.
+    pub const ADMIN: [Tab; 3] = [Tab::Programs, Tab::Startup, Tab::Processes];
+
+    pub fn visible(admin: bool) -> &'static [Tab] {
+        if admin { &Tab::ADMIN } else { &Tab::ALL }
+    }
 
     pub fn title(self) -> &'static str {
         match self {
@@ -30,6 +40,9 @@ impl Tab {
             Tab::Transfer => "Передача",
             Tab::Cleanup => "Очистка",
             Tab::Content => "Содержимое",
+            Tab::Programs => "Программы",
+            Tab::Startup => "Автозагрузка",
+            Tab::Processes => "Процессы",
             Tab::Settings => "Настройки",
         }
     }
@@ -65,12 +78,22 @@ pub struct Shared {
     pub shell_hwnd: AtomicIsize,
     pub hotkey_error: Mutex<Option<String>>,
     pub quitting: AtomicBool,
+    /// The elevated window of the system tools: no tray, no hotkey, no indexer, no job queue of its own.
+    pub admin: bool,
 }
 
 impl Shared {
     pub fn new(settings: Settings) -> Arc<Shared> {
-        let backend = Backend::new(&settings);
-        let queue = TransferQueue::new(Some(strela_core::util::data_dir().join("queue.json")), Guard::system());
+        Shared::build(settings, false)
+    }
+
+    pub fn new_admin(settings: Settings) -> Arc<Shared> {
+        Shared::build(settings, true)
+    }
+
+    fn build(settings: Settings, admin: bool) -> Arc<Shared> {
+        let backend = if admin { Backend::idle() } else { Backend::new(&settings) };
+        let queue = TransferQueue::new((!admin).then(|| strela_core::util::data_dir().join("queue.json")), Guard::system());
         Arc::new(Shared {
             settings: RwLock::new(settings),
             queue,
@@ -83,6 +106,7 @@ impl Shared {
             shell_hwnd: AtomicIsize::new(0),
             hotkey_error: Mutex::new(None),
             quitting: AtomicBool::new(false),
+            admin,
         })
     }
 

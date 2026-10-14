@@ -1,6 +1,6 @@
 [package]
 name = "strela-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/ahsoggg-creator/strela"
@@ -20,7 +20,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_System_Com", "Win32_UI_WindowsAndMessaging", "Win32_Storage_FileSystem"] }
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_Threading", "Win32_System_Memory", "Win32_System_Pipes", "Win32_Security_Authorization", "Win32_System_Diagnostics_Debug", "Win32_System_SystemServices", "Win32_System_WindowsProgramming", "Win32_System_Time", "Win32_Security_Authentication_Identity"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_Threading", "Win32_System_Memory", "Win32_System_Pipes", "Win32_Security_Authorization", "Win32_System_Diagnostics_Debug", "Win32_System_SystemServices", "Win32_System_WindowsProgramming", "Win32_System_Time", "Win32_Security_Authentication_Identity", "Win32_System_Registry", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus", "Win32_System_Services", "Win32_System_LibraryLoader", "Win32_System_Environment", "Win32_UI_Shell"] }
 xxhash-rust = { version = "0.8.19", features = ["xxh3"] }
 
 [dev-dependencies]

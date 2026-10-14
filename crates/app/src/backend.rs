@@ -33,6 +33,8 @@ pub struct Backend {
     mode: Mutex<Mode>,
     use_service: Mutex<bool>,
     roots: Mutex<Vec<String>>,
+    /// Never starts an indexer (the administrator window shares the data folder with the main process).
+    idle: bool,
 }
 
 fn service_alive() -> Option<bool> {
@@ -49,9 +51,14 @@ impl Backend {
             mode: Mutex::new(Mode::Local),
             use_service: Mutex::new(s.use_service),
             roots: Mutex::new(s.index_roots.clone()),
+            idle: false,
         });
         b.refresh();
         b
+    }
+
+    pub fn idle() -> Arc<Backend> {
+        Arc::new(Backend { local: Mutex::new(None), mode: Mutex::new(Mode::Local), use_service: Mutex::new(false), roots: Mutex::new(Vec::new()), idle: true })
     }
 
     pub fn apply_settings(&self, s: &Settings) {
@@ -70,6 +77,9 @@ impl Backend {
 
     /// Picks the service when reachable, otherwise makes sure the local indexer runs. Cheap; call every few seconds.
     pub fn refresh(&self) {
+        if self.idle {
+            return;
+        }
         let want_service = *self.use_service.lock().unwrap() && service_alive().is_some();
         if want_service {
             *self.mode.lock().unwrap() = Mode::Service;

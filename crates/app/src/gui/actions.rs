@@ -70,6 +70,41 @@ fn run(shared: &Arc<Shared>, verb: &str, paths: &[PathBuf]) {
     );
 }
 
+fn is_elevated_cached() -> bool {
+    static E: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *E.get_or_init(strela_core::winapi::is_elevated)
+}
+
+/// Starts this program again with administrator rights (one UAC prompt), showing only the system tools.
+/// The running copy stays: the elevated window is a separate process.
+pub fn relaunch_admin(tab: &str) -> bool {
+    let Ok(exe) = std::env::current_exe() else { return false };
+    let (verb, file, args) = (wide("runas"), wide(&exe.to_string_lossy()), wide(&format!("--admin {tab}")));
+    // SAFETY: NUL-terminated strings; the call only starts a process.
+    let r = unsafe { ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), args.as_ptr(), std::ptr::null(), 1) };
+    r as usize > 32
+}
+
+/// A one-line notice with a button, shown above the system tools when Strela is not elevated.
+pub fn admin_banner(ui: &mut Ui, shared: &Arc<Shared>, tab: &str, why: &str) {
+    if is_elevated_cached() || shared.admin {
+        return;
+    }
+    let p = super::theme::pal(ui);
+    eframe::egui::Frame::new().fill(p.warn.gamma_multiply(0.14)).stroke(eframe::egui::Stroke::new(1.0, p.warn.gamma_multiply(0.6))).corner_radius(10).inner_margin(eframe::egui::Margin::symmetric(12, 7)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            ui.label(eframe::egui::RichText::new(why).size(12.5));
+            ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
+                if ui.button("Открыть от администратора").clicked() {
+                    relaunch_admin(tab);
+                }
+            });
+        });
+    });
+    ui.add_space(8.0);
+}
+
 /// Context-menu body for one or several paths. Returns true if the menu should close.
 pub fn path_menu(ui: &mut Ui, shared: &Arc<Shared>, paths: &[PathBuf]) -> bool {
     let Some(first) = paths.first() else { return false };

@@ -2271,7 +2271,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strela-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "eframe",
  "embed-resource",
@@ -2287,7 +2287,7 @@ dependencies = [
 
 [[package]]
 name = "strela-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "rayon",
@@ -2297,7 +2297,7 @@ dependencies = [
 
 [[package]]
 name = "strela-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "crossbeam-channel",

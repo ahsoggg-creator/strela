@@ -1,4 +1,4 @@
-//! Thin WinAPI wrappers. All `unsafe` of the crate lives here.
+//! Thin WinAPI wrappers for the file system and volumes. (`registry`, `procs` and `startup` wrap the registry, processes and services themselves.)
 
 use std::ffi::{OsString, c_void};
 use std::fs::{File, OpenOptions};

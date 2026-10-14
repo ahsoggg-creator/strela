@@ -1,13 +1,17 @@
 //! The window: tabs, the Spotlight popup, dialogs, toasts.
 
 pub mod actions;
+pub mod autostart;
 pub mod cleanup;
 pub mod content;
 pub mod dialogs;
 pub mod icons;
 pub mod installer;
 pub mod prefs;
+pub mod processes;
+pub mod programs;
 pub mod search;
+pub mod table;
 pub mod theme;
 pub mod transfer;
 
@@ -22,11 +26,14 @@ use strela_core::util;
 
 use crate::backend::{Mode as BackendMode, Status};
 use crate::state::{Shared, Tab, UiEvent};
+use autostart::StartupTab;
 use cleanup::CleanupTab;
 use content::ContentTab;
 use dialogs::{DeleteDialog, PickDialog};
 use icons::Icons;
 use prefs::PrefsTab;
+use processes::ProcessesTab;
+use programs::ProgramsTab;
 use search::SearchPane;
 use theme::pal;
 use transfer::TransferTab;
@@ -57,6 +64,9 @@ pub struct App {
     transfer: TransferTab,
     cleanup: CleanupTab,
     content: ContentTab,
+    programs: ProgramsTab,
+    startup: StartupTab,
+    processes: ProcessesTab,
     prefs: PrefsTab,
     delete: Option<DeleteDialog>,
     pick: Option<PickDialog>,
@@ -110,16 +120,20 @@ impl App {
                 .expect("spawn status thread");
         }
         let in_app = matches!(screen, Screen::Main);
+        let shared_admin = shared.admin;
         App {
             main_search: SearchPane::new(shared.clone(), 2000),
             spot_search: SearchPane::new(shared.clone(), 60),
             transfer: TransferTab::new(&shared),
             cleanup: CleanupTab::new(),
             content: ContentTab::new(),
+            programs: ProgramsTab::new(),
+            startup: StartupTab::new(),
+            processes: ProcessesTab::new(),
             prefs: PrefsTab::new(),
             shared,
             screen,
-            tab: Tab::Search,
+            tab: Tab::visible(shared_admin)[0],
             icons: Icons::default(),
             logo,
             delete: None,
@@ -260,7 +274,7 @@ impl App {
                 }
                 ui.label(RichText::new("Strela").size(19.0).strong());
                 ui.add_space(14.0);
-                for t in Tab::ALL {
+                for &t in Tab::visible(self.shared.admin) {
                     if theme::tab_pill(ui, t.title(), self.tab == t).clicked() {
                         self.tab = t;
                     }
@@ -269,6 +283,10 @@ impl App {
                     let st = self.status.lock().unwrap().clone();
                     let total: usize = st.roots.iter().map(|r| r.entries).sum();
                     let scanning = st.roots.iter().find(|r| r.phase == "scanning");
+                    if self.shared.admin {
+                        theme::chip(ui, "администратор", p.warn);
+                        return;
+                    }
                     let (text, color) = match (st.mode, scanning) {
                         (_, Some(r)) if r.progress > 0.0 => (format!("индексация {}  {:.0}%", r.root, r.progress * 100.0), p.warn),
                         (_, Some(r)) => (format!("индексация {} · найдено {}", r.root, fmt_count(r.entries)), p.warn),
@@ -316,6 +334,9 @@ impl App {
                 Tab::Transfer => self.transfer.ui(ui, &self.shared),
                 Tab::Cleanup => self.cleanup.ui(ui, &self.shared, &mut self.icons),
                 Tab::Content => self.content.ui(ui, &self.shared, &mut self.icons),
+                Tab::Programs => self.programs.ui(ui, &self.shared),
+                Tab::Startup => self.startup.ui(ui, &self.shared),
+                Tab::Processes => self.processes.ui(ui, &self.shared),
                 Tab::Settings => {
                     let st = self.status.lock().unwrap().clone();
                     if self.prefs.ui(ui, &self.shared, &st) {
@@ -473,14 +494,17 @@ impl App {
         let (ctrl_f, tabs) = ctx.input_mut(|i| {
             let f = i.consume_key(Modifiers::CTRL, Key::F);
             let mut t = None;
-            for (n, k) in [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5].iter().enumerate() {
-                if i.consume_key(Modifiers::CTRL, *k) {
-                    t = Some(Tab::ALL[n]);
+            let visible = Tab::visible(self.shared.admin);
+            for (n, k) in [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8].iter().enumerate() {
+                if let Some(tab) = visible.get(n)
+                    && i.consume_key(Modifiers::CTRL, *k)
+                {
+                    t = Some(*tab);
                 }
             }
             (f, t)
         });
-        if ctrl_f {
+        if ctrl_f && !self.shared.admin {
             self.tab = Tab::Search;
             self.main_search.focus = true;
         }
@@ -504,6 +528,9 @@ impl eframe::App for App {
         self.frame_no += 1;
         if self.frame_no == 1 {
             self.shared.main_hwnd.store(crate::shell::find_main_window(), std::sync::atomic::Ordering::Relaxed);
+            if self.shared.admin {
+                ctx.send_viewport_cmd(ViewportCommand::Title("Strela — администратор".into()));
+            }
         }
         if self.start_hidden && self.frame_no >= 2 && !self.geometry_pending {
             // see main.rs: the off-screen 8x8 window of a hidden start is hidden once its first frames are out
@@ -522,7 +549,7 @@ impl eframe::App for App {
         // closing the window hides it to the tray
         if ctx.input(|i| i.viewport().close_requested()) {
             match self.screen {
-                Screen::Main | Screen::Spotlight if self.shared.settings().close_to_tray && !self.shared.quitting.load(std::sync::atomic::Ordering::Relaxed) => {
+                Screen::Main | Screen::Spotlight if self.shared.settings().close_to_tray && !self.shared.admin && !self.shared.quitting.load(std::sync::atomic::Ordering::Relaxed) => {
                     ctx.send_viewport_cmd(ViewportCommand::CancelClose);
                     if matches!(self.screen, Screen::Spotlight) {
                         self.leave_spotlight(&ctx, true);

@@ -1,6 +1,8 @@
-//! `strela-cli` — the Strela engine without a GUI: search, copy, move, delete, grep, biggest files.
+//! `strela-cli` — the Strela engine without a GUI: search, copy, move, delete, grep, biggest files, programs,
+//! startup entries and processes.
 
 mod bench;
+mod sys;
 
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
@@ -110,6 +112,8 @@ enum Cmd {
         #[arg(long, short = 'n', default_value_t = 20)]
         top: usize,
     },
+    #[command(flatten)]
+    Sys(sys::SysCmd),
     #[command(hide = true)]
     Bench(bench::BenchCmd),
 }
@@ -190,6 +194,7 @@ fn run(cmd: Cmd) -> Res {
             grep_cmd(pattern, root, filter, regex, case_sensitive, max_per_file)
         }
         Cmd::Largest { path, top } => largest_cmd(path, top),
+        Cmd::Sys(s) => sys::run(s),
         Cmd::Bench(b) => bench::run(b),
     }
 }

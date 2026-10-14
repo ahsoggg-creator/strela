@@ -145,6 +145,20 @@ fn main() {
     }
 
     // ---- the app
+    if let Some(i) = args.iter().position(|a| a == "--admin") {
+        // the elevated window of the system tools: its own process, no tray / hotkey / pipe / indexer
+        let tab = match args.get(i + 1).map(String::as_str) {
+            Some("startup") => state::Tab::Startup,
+            Some("processes") => state::Tab::Processes,
+            _ => state::Tab::Programs,
+        };
+        let shared = Shared::new_admin(Settings::load());
+        shared.push_event(state::UiEvent::Show(tab));
+        if let Err(e) = run_gui(shared.clone(), Screen::Main, false) {
+            eprintln!("{e}");
+        }
+        std::process::exit(0);
+    }
     let cmd = commands::parse_args(&args);
     if !become_primary() {
         // SAFETY: lets the running instance take the foreground for the window the command may open.
