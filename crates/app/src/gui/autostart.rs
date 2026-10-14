@@ -12,7 +12,7 @@ use super::table::{self, Col, Sort, col};
 use super::theme::{self, pal};
 use crate::state::Shared;
 
-const COLS: [Col; 5] = [col("", 54.0), col("Название", 0.0), col("Издатель", 170.0), col("Тип", 150.0), col("Команда", 0.0)];
+const COLS: [Col; 6] = [col("", 54.0), col("Название", 0.0), col("Издатель", 160.0), col("Тип", 140.0), col("Подпись", 150.0), col("Команда", 0.0)];
 
 fn id_of(e: &Entry) -> String {
     format!("{:?}|{}|{}|{}", e.group, e.origin, e.name, e.command)
@@ -103,7 +103,8 @@ impl StartupTab {
                 0 => a.enabled.cmp(&b.enabled),
                 2 => a.company.as_deref().unwrap_or("").to_lowercase().cmp(&b.company.as_deref().unwrap_or("").to_lowercase()),
                 3 => a.group.cmp(&b.group).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-                4 => a.command.to_lowercase().cmp(&b.command.to_lowercase()),
+                4 => table::trust_rank(a.path.as_deref()).cmp(&table::trust_rank(b.path.as_deref())),
+                5 => a.command.to_lowercase().cmp(&b.command.to_lowercase()),
                 _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
             };
             if s.desc { o.reverse() } else { o }
@@ -168,6 +169,7 @@ impl StartupTab {
             }
         });
         ui.add_space(8.0);
+        table::repaint_while_checking(ui);
         let idx = self.visible();
         table::header(ui, &COLS, &mut self.sort);
         let details_h = 132.0;
@@ -185,7 +187,7 @@ impl StartupTab {
                 let xs = table::layout(rect.width(), &COLS);
                 let sw_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + xs[0].0, rect.top()), vec2(xs[0].1, rect.height()));
                 let can = e.group != Group::Sneaky;
-                if table::switch(ui, sw_rect, e.enabled, can) {
+                if table::switch(ui, sw_rect, id_of(e), e.enabled, can) {
                     toggle = Some(i);
                 }
                 let dim_if_off = if e.enabled { p.text } else { p.dim };
@@ -196,7 +198,9 @@ impl StartupTab {
                     Some(w) => (p.warn, format!("⚠ {w}")),
                     None => (p.dim, e.command.clone()),
                 };
-                table::cell(ui, rect, &COLS[4], xs[4], &cmd, cmd_color, 12.0);
+                let (tt, tc) = table::trust_cell(&p, e.path.as_deref().filter(|_| e.exists));
+                table::cell(ui, rect, &COLS[4], xs[4], &tt, tc, 12.5);
+                table::cell(ui, rect, &COLS[5], xs[5], &cmd, cmd_color, 12.0);
                 if resp.clicked() {
                     select = Some(id_of(e));
                 }

@@ -31,10 +31,15 @@ pub struct App {
     pub icon: Option<PathBuf>,
     /// `{GUID}` of a Windows Installer (MSI) product.
     pub msi_guid: Option<String>,
+    /// Full package name of a Microsoft Store (AppX / MSIX) app.
+    pub store: Option<String>,
 }
 
 impl App {
     pub fn scope(&self) -> &'static str {
+        if self.store.is_some() {
+            return "приложение Microsoft Store";
+        }
         match self.key.hive {
             Hive::User => "для текущего пользователя",
             Hive::Machine => "для всех пользователей",
@@ -136,8 +141,25 @@ pub fn list() -> Vec<App> {
                 quiet_uninstall: quiet,
                 icon,
                 msi_guid,
+                store: None,
             });
         }
+    }
+    for p in crate::store::list() {
+        out.push(App {
+            key: KeyPath::new(Hive::User, View::Native, format!(r"AppX\{}", p.full_name)),
+            name: p.name,
+            version: p.version,
+            publisher: p.publisher,
+            install_location: p.install_location,
+            install_date: p.install_date,
+            size_bytes: 0,
+            uninstall: None,
+            quiet_uninstall: None,
+            icon: None,
+            msi_guid: None,
+            store: Some(p.full_name),
+        });
     }
     // the same program is often registered in both views
     let mut seen = std::collections::HashSet::new();
@@ -249,6 +271,15 @@ pub fn under(p: &Path, dir: &Path) -> bool {
 pub fn uninstall(app: &App, mode: Mode, progress: &Progress, log: &mut dyn FnMut(&str)) -> Result<Report> {
     let t0 = Instant::now();
     let mut rep = Report::default();
+    if let Some(full) = &app.store {
+        if let Some(dir) = &app.install_location {
+            stop_running_from(dir, &mut rep, log);
+        }
+        log("удаляю приложение Microsoft Store");
+        crate::store::remove(full)?;
+        rep.elapsed = t0.elapsed();
+        return Ok(rep);
+    }
     let forced = mode == Mode::Force && app.msi_guid.is_none();
     if mode != Mode::Interactive
         && let Some(dir) = &app.install_location
@@ -338,6 +369,7 @@ mod tests {
             quiet_uninstall: None,
             icon: None,
             msi_guid: Some(g.into()),
+            store: None,
         };
         assert_eq!(app.silent_command().unwrap(), format!("msiexec.exe /x {g} /qn /norestart"));
     }
@@ -380,6 +412,7 @@ mod tests {
             quiet_uninstall: None,
             icon: None,
             msi_guid: None,
+            store: None,
         };
         let mut lines = Vec::new();
         let rep = uninstall(&app, Mode::Force, &Progress::default(), &mut |s| lines.push(s.to_string())).unwrap();

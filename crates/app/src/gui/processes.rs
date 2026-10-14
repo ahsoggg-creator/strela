@@ -15,7 +15,7 @@ use super::table::{self, Col, Sort, col, rcol};
 use super::theme::{self, pal};
 use crate::state::Shared;
 
-const COLS: [Col; 10] = [
+const COLS: [Col; 11] = [
     col("Процесс", 0.0),
     rcol("PID", 66.0),
     rcol("ЦП", 62.0),
@@ -24,7 +24,8 @@ const COLS: [Col; 10] = [
     rcol("Потоки", 64.0),
     rcol("Дескр.", 70.0),
     rcol("Ввод-вывод", 100.0),
-    col("Пользователь", 150.0),
+    col("Пользователь", 130.0),
+    col("Подпись", 140.0),
     col("Описание", 0.0),
 ];
 
@@ -127,7 +128,8 @@ impl ProcessesTab {
             6 => a.handles.cmp(&b.handles),
             7 => (a.io_read + a.io_write).cmp(&(b.io_read + b.io_write)),
             8 => a.user.as_deref().unwrap_or("").to_lowercase().cmp(&b.user.as_deref().unwrap_or("").to_lowercase()),
-            9 => a.description.as_deref().unwrap_or("").to_lowercase().cmp(&b.description.as_deref().unwrap_or("").to_lowercase()),
+            9 => table::trust_rank(a.path.as_deref()).cmp(&table::trust_rank(b.path.as_deref())),
+            10 => a.description.as_deref().unwrap_or("").to_lowercase().cmp(&b.description.as_deref().unwrap_or("").to_lowercase()),
             _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
         };
         if self.sort.desc { o.reverse() } else { o }
@@ -242,6 +244,7 @@ impl ProcessesTab {
             });
         });
         ui.add_space(8.0);
+        table::repaint_while_checking(ui);
         let rows = self.rows();
         table::header(ui, &COLS, &mut self.sort);
         let details_h = if self.show_modules && self.selected.is_some() { 300.0 } else { 172.0 };
@@ -284,7 +287,9 @@ impl ProcessesTab {
                 table::cell(ui, rect, &COLS[6], xs[6], &if pr.handles > 0 { pr.handles.to_string() } else { "—".into() }, p.dim, 12.5);
                 table::cell(ui, rect, &COLS[7], xs[7], &if pr.io_read + pr.io_write > 0 { util::bytes(pr.io_read + pr.io_write) } else { "—".into() }, p.dim, 12.5);
                 table::cell(ui, rect, &COLS[8], xs[8], pr.user.as_deref().map_or("", |u| u.rsplit('\\').next().unwrap_or(u)), p.dim, 12.5);
-                table::cell(ui, rect, &COLS[9], xs[9], pr.description.as_deref().or(pr.company.as_deref()).unwrap_or(""), p.dim, 12.5);
+                let (tt, tc) = table::trust_cell(&p, pr.path.as_deref());
+                table::cell(ui, rect, &COLS[9], xs[9], &tt, tc, 12.5);
+                table::cell(ui, rect, &COLS[10], xs[10], pr.description.as_deref().or(pr.company.as_deref()).unwrap_or(""), p.dim, 12.5);
                 if resp.clicked() {
                     clicked = Some(pr.pid);
                 }

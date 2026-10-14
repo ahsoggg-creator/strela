@@ -30,11 +30,14 @@ pub struct Sort {
 pub fn layout(total: f32, cols: &[Col]) -> Vec<(f32, f32)> {
     let fixed: f32 = cols.iter().map(|c| c.width).sum();
     let flex = cols.iter().filter(|c| c.width <= 0.0).count().max(1) as f32;
-    let each = ((total - 16.0 - fixed) / flex).max(60.0);
+    let avail = (total - 16.0).max(0.0);
+    // In a narrow window shrink the fixed columns so the flexible ones keep a readable width and nothing overlaps.
+    let k = if fixed > 0.0 && fixed + flex * 110.0 > avail { ((avail - flex * 110.0) / fixed).clamp(0.45, 1.0) } else { 1.0 };
+    let each = ((avail - fixed * k) / flex).max(40.0);
     let mut x = 8.0;
     cols.iter()
         .map(|c| {
-            let w = if c.width > 0.0 { c.width } else { each };
+            let w = if c.width > 0.0 { (c.width * k).max(if c.width <= 60.0 { c.width } else { 0.0 }) } else { each };
             let r = (x, w);
             x += w;
             r
@@ -63,7 +66,7 @@ pub fn header(ui: &mut Ui, cols: &[Col], sort: &mut Sort) -> bool {
         let arrow = if sort.col == i { if sort.desc { " ▼" } else { " ▲" } } else { "" };
         let color = if sort.col == i || resp.hovered() { p.text } else { p.dim };
         let (anchor, px) = if c.right { (Align2::RIGHT_CENTER, cell.right() - 6.0) } else { (Align2::LEFT_CENTER, cell.left() + 2.0) };
-        ui.painter_at(cell).text(pos2(px, cell.center().y), anchor, format!("{}{arrow}", c.title), FontId::proportional(12.0), color);
+        ui.painter().with_clip_rect(cell.intersect(ui.clip_rect())).text(pos2(px, cell.center().y), anchor, format!("{}{arrow}", c.title), FontId::proportional(12.0), color);
     }
     changed
 }
@@ -72,14 +75,15 @@ pub fn header(ui: &mut Ui, cols: &[Col], sort: &mut Sort) -> bool {
 pub fn cell(ui: &Ui, row: Rect, col: &Col, pos: (f32, f32), text: &str, color: Color32, size: f32) {
     let cell = Rect::from_min_size(pos2(row.left() + pos.0, row.top()), vec2(pos.1, row.height()));
     let (anchor, px) = if col.right { (Align2::RIGHT_CENTER, cell.right() - 6.0) } else { (Align2::LEFT_CENTER, cell.left() + 2.0) };
-    ui.painter_at(cell).text(pos2(px, row.center().y), anchor, text, FontId::proportional(size), color);
+    ui.painter().with_clip_rect(cell.intersect(row).intersect(ui.clip_rect())).text(pos2(px, row.center().y), anchor, text, FontId::proportional(size), color);
 }
 
 /// A flat checkbox-like switch painted in a row; returns true when clicked.
-pub fn switch(ui: &mut Ui, at: Rect, on: bool, enabled: bool) -> bool {
+/// `key` must identify the row, not its position, so the animation survives scrolling.
+pub fn switch(ui: &mut Ui, at: Rect, key: impl std::hash::Hash + std::fmt::Debug, on: bool, enabled: bool) -> bool {
     let p = pal(ui);
-    let resp = ui.interact(at, ui.id().with(("sw", at.min.x as i32, at.min.y as i32)), if enabled { Sense::click() } else { Sense::hover() });
-    let t = ui.ctx().animate_bool_with_time(resp.id, on, 0.12);
+    let resp = ui.interact(at, ui.id().with(("sw", key)), if enabled { Sense::click() } else { Sense::hover() });
+    let t = ui.ctx().animate_bool_with_time(resp.id, on, 0.1);
     let track = Rect::from_center_size(at.center(), vec2(30.0, 16.0));
     let fill = super::theme::lerp(p.border, p.accent, t);
     ui.painter().rect_filled(track, 99.0, if enabled { fill } else { fill.gamma_multiply(0.5) });
@@ -110,4 +114,44 @@ pub fn matches(filter: &str, hay: &[&str]) -> bool {
     }
     let joined = hay.iter().map(|s| s.to_lowercase()).collect::<Vec<_>>().join("\u{1}");
     f.split_whitespace().all(|w| joined.contains(w))
+}
+
+/// Signature verdict for a file as a table cell: text and colour. Checks run in the background; `…` until done.
+pub fn trust_cell(p: &super::theme::Palette, path: Option<&std::path::Path>) -> (String, Color32) {
+    use strela_core::trust::{self, Trust};
+    let Some(path) = path else { return (String::new(), p.dim) };
+    let risk = trust::risky_location(path);
+    let (base, color) = match trust::lookup(path) {
+        None => ("…", p.dim),
+        Some(Trust::Signed) => ("подписан", p.dim),
+        Some(Trust::Unsigned) => ("без подписи", if risk.is_some() { p.err } else { p.warn }),
+        Some(Trust::Invalid) => ("подпись нарушена", p.err),
+        Some(Trust::Unknown) => ("", p.dim),
+    };
+    match risk {
+        Some(r) if !base.is_empty() => (format!("{base} · {r}"), color),
+        Some(r) => (r.to_string(), p.warn),
+        None => (base.to_string(), color),
+    }
+}
+
+/// Sort key for the signature column: the doubtful first.
+pub fn trust_rank(path: Option<&std::path::Path>) -> u8 {
+    use strela_core::trust::{self, Trust};
+    let Some(path) = path else { return 5 };
+    let risky = trust::risky_location(path).is_some() as u8;
+    match trust::lookup(path) {
+        Some(Trust::Invalid) => 0,
+        Some(Trust::Unsigned) => 1,
+        None => 3,
+        Some(Trust::Signed) => 4 - risky,
+        Some(Trust::Unknown) => 5,
+    }
+}
+
+/// Keeps the table repainting while signature checks are still running.
+pub fn repaint_while_checking(ui: &Ui) {
+    if strela_core::trust::pending() > 0 {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
+    }
 }

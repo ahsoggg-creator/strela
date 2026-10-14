@@ -16,7 +16,9 @@ pub mod progress;
 pub mod query;
 pub mod registry;
 pub mod startup;
+pub mod store;
 pub mod transfer;
+pub mod trust;
 pub mod util;
 pub mod winapi;
 

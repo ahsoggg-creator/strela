@@ -45,12 +45,15 @@ struct Flow {
     summary: Vec<String>,
     changed: bool,
     scan_after: bool,
+    /// Set when the scan follows an uninstall: reliable traces are removed right away, doubtful ones are left for review.
+    auto_clean: bool,
+    pending: Vec<Trace>,
 }
 
 impl Flow {
     fn new(subject: Subject, app: Option<App>, stage: Stage) -> Flow {
         let (tx, rx) = channel();
-        Flow { subject, app, stage, tx, rx, progress: Arc::new(Progress::default()), summary: Vec::new(), changed: false, scan_after: true }
+        Flow { subject, app, stage, tx, rx, progress: Arc::new(Progress::default()), summary: Vec::new(), changed: false, scan_after: true, auto_clean: false, pending: Vec::new() }
     }
 
     fn start_uninstall(&mut self, ctx: &egui::Context, mode: Mode, scan_after: bool) {
@@ -70,6 +73,7 @@ impl Flow {
         self.stage = Stage::Working { what: "Удаление программы", log: Vec::new(), started: Instant::now() };
         self.changed = true;
         self.scan_after = scan_after;
+        self.auto_clean = scan_after;
     }
 
     fn start_scan(&mut self, ctx: &egui::Context) {
@@ -122,6 +126,17 @@ impl Flow {
                 Msg::Scanned(traces) => {
                     if traces.is_empty() {
                         self.done(vec!["Следов не найдено — система чистая.".into()], true, None);
+                    } else if self.auto_clean {
+                        self.auto_clean = false;
+                        let (high, rest): (Vec<Trace>, Vec<Trace>) = traces.into_iter().partition(|t| t.confidence == Confidence::High);
+                        self.pending = rest;
+                        if high.is_empty() {
+                            let rest = std::mem::take(&mut self.pending);
+                            let checked = vec![false; rest.len()];
+                            self.stage = Stage::Review { traces: rest, checked };
+                        } else {
+                            self.start_clean(ctx, high);
+                        }
                     } else {
                         let checked = traces.iter().map(|t| t.confidence == Confidence::High).collect();
                         self.stage = Stage::Review { traces, checked };
@@ -139,7 +154,14 @@ impl Flow {
                         lines.push("Разделы реестра перед удалением сохранены в .reg-файлы — двойной щелчок по файлу вернёт их.".into());
                     }
                     let ok = rep.failed.is_empty();
-                    self.done(lines, ok, rep.backup);
+                    if self.pending.is_empty() {
+                        self.done(lines, ok, rep.backup);
+                    } else {
+                        self.summary.extend(lines);
+                        let rest = std::mem::take(&mut self.pending);
+                        let checked = vec![false; rest.len()];
+                        self.stage = Stage::Review { traces: rest, checked };
+                    }
                 }
             }
         }
@@ -203,17 +225,21 @@ impl Flow {
                         "у программы нет тихого режима — откроется её окно удаления"
                     };
                     let force_note = if app.msi_guid.is_some() { "для программ Windows Installer всё равно используется msiexec без окон" } else if app.install_location.is_some() { "закроет процессы и службы программы, мгновенно удалит её папку и запись из списка — без деинсталлятора" } else { "папка установки неизвестна: удалится только запись о программе, остальное найдёт поиск следов" };
-                    for (m, name, note) in [
-                        (Mode::Quiet, "Обычное удаление, без окон", quiet_note),
-                        (Mode::Interactive, "Обычное удаление, с окнами деинсталлятора", "как через «Программы и компоненты»"),
-                        (Mode::Force, "Принудительное, мгновенное", force_note),
-                    ] {
-                        ui.radio_value(mode, m, RichText::new(name).strong());
-                        ui.label(theme::dim(ui, format!("      {note}")));
-                        ui.add_space(2.0);
+                    if app.store.is_some() {
+                        ui.label("Приложение Microsoft Store будет удалено для текущего пользователя вместе с его данными — без окон и деинсталлятора.");
+                    } else {
+                        for (m, name, note) in [
+                            (Mode::Quiet, "Обычное удаление, без окон", quiet_note),
+                            (Mode::Interactive, "Обычное удаление, с окнами деинсталлятора", "как через «Программы и компоненты»"),
+                            (Mode::Force, "Принудительное, мгновенное", force_note),
+                        ] {
+                            ui.radio_value(mode, m, RichText::new(name).strong());
+                            ui.label(theme::dim(ui, format!("      {note}")));
+                            ui.add_space(2.0);
+                        }
                     }
                     ui.add_space(6.0);
-                    ui.checkbox(scan_after, "После удаления найти следы программы и показать список для очистки");
+                    ui.checkbox(scan_after, "После удаления сразу очистить следы (надёжные — автоматически, сомнительные — покажу на проверку)");
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
                         if theme::danger_button(ui, "Удалить программу").clicked() {
@@ -242,6 +268,9 @@ impl Flow {
                     ctx.request_repaint_after(Duration::from_millis(100));
                 }
                 Stage::Review { traces, checked } => {
+                    for l in &self.summary {
+                        ui.label(theme::dim(ui, l.as_str()));
+                    }
                     review_ui(ui, traces, checked, &p);
                     ui.add_space(8.0);
                     let n = checked.iter().filter(|c| **c).count();
