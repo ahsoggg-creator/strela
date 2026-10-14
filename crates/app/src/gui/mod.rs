@@ -14,6 +14,7 @@ pub mod search;
 pub mod table;
 pub mod theme;
 pub mod transfer;
+pub mod updater;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -69,6 +70,7 @@ pub struct App {
     processes: ProcessesTab,
     prefs: PrefsTab,
     delete: Option<DeleteDialog>,
+    updater: Option<updater::UpdateDialog>,
     pick: Option<PickDialog>,
     status: Arc<Mutex<Status>>,
     toasts: Vec<Toast>,
@@ -137,6 +139,7 @@ impl App {
             icons: Icons::default(),
             logo,
             delete: None,
+            updater: None,
             pick: None,
             status,
             toasts: Vec::new(),
@@ -280,6 +283,16 @@ impl App {
                     }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let available = match &*self.shared.update.lock().unwrap() {
+                        crate::update::UpdateState::Available(r) => Some(r.clone()),
+                        _ => None,
+                    };
+                    if let Some(r) = available
+                        && !self.shared.admin
+                        && ui.add(egui::Button::new(RichText::new(format!("⬆ Обновление {}", r.version)).color(Color32::WHITE).strong()).fill(p.ok).corner_radius(99)).on_hover_text("Доступна новая версия").clicked()
+                    {
+                        self.updater = Some(updater::UpdateDialog::new(r));
+                    }
                     let st = self.status.lock().unwrap().clone();
                     let total: usize = st.roots.iter().map(|r| r.entries).sum();
                     let scanning = st.roots.iter().find(|r| r.phase == "scanning");
@@ -464,6 +477,11 @@ impl App {
     }
 
     fn dialogs_ui(&mut self, ctx: &egui::Context) {
+        if let Some(u) = &mut self.updater
+            && u.ui(ctx, &self.shared)
+        {
+            self.updater = None;
+        }
         if let Some(d) = &mut self.delete {
             match d.ui(ctx, &self.shared) {
                 dialogs::Outcome::Open => {}

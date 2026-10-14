@@ -80,6 +80,9 @@ pub struct Settings {
     pub regex: bool,
     pub close_to_tray: bool,
     pub last_dest: String,
+    /// Look for new releases on GitHub (one request to api.github.com about once a day).
+    pub check_updates: bool,
+    pub last_update_check: u64,
 }
 
 impl Default for Settings {
@@ -98,6 +101,8 @@ impl Default for Settings {
             regex: false,
             close_to_tray: true,
             last_dest: String::new(),
+            check_updates: true,
+            last_update_check: 0,
         }
     }
 }

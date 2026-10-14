@@ -10,6 +10,7 @@ mod service;
 mod settings;
 mod shell;
 mod state;
+mod update;
 mod winint;
 
 use std::sync::Arc;
@@ -91,6 +92,32 @@ fn main() {
     install_panic_log();
     let args: Vec<String> = std::env::args().collect();
 
+    // started by an update: let the old copy finish first, so it releases the single-instance lock
+    if let Some(pid) = args.iter().position(|a| a == "--wait-pid").and_then(|i| args.get(i + 1)).and_then(|p| p.parse::<u32>().ok()) {
+        update::wait_for_exit(pid, 20);
+    }
+    // `Strela.exe --update`: check, install and restart without opening anything first (exit code 3: up to date)
+    if has(&args, "--update") {
+        let code = match update::check(update::CURRENT) {
+            Ok(None) => 3,
+            Ok(Some(rel)) => match update::install(&rel, &|_, _| {}, &std::sync::atomic::AtomicBool::new(false)) {
+                Ok(exe) => {
+                    update::restart(&exe);
+                    0
+                }
+                Err(e) => {
+                    let _ = std::fs::write(std::env::temp_dir().join("Strela-update.log"), e);
+                    2
+                }
+            },
+            Err(e) => {
+                let _ = std::fs::write(std::env::temp_dir().join("Strela-update.log"), e);
+                1
+            }
+        };
+        std::process::exit(code);
+    }
+
     // ---- service entry points
     if has(&args, "--service") {
         let _ = service::run_dispatcher();
@@ -171,6 +198,8 @@ fn main() {
     let shared = Shared::new(settings);
     commands::start_server(shared.clone());
     shell::start(shared.clone());
+    update::cleanup_old();
+    update::start_background(shared.clone());
     if winint::running_installed() {
         // keep the "Send to" drive list in step with the drives that exist now
         std::thread::spawn(|| {

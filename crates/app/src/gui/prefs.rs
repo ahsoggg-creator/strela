@@ -193,6 +193,37 @@ impl PrefsTab {
                 }
             });
             ui.add_space(10.0);
+            // ---- updates
+            theme::card(ui).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                theme::heading(ui, "Обновления");
+                ui.checkbox(&mut s.check_updates, "Проверять обновления на GitHub (раз в сутки)");
+                let state = shared.update.lock().unwrap().clone();
+                ui.horizontal(|ui| {
+                    ui.label(format!("Установлена версия {}", crate::update::CURRENT));
+                    match &state {
+                        crate::update::UpdateState::Checking => {
+                            ui.add(egui::Spinner::new().size(14.0).color(p.accent));
+                        }
+                        crate::update::UpdateState::UpToDate => {
+                            ui.colored_label(p.ok, "· это последняя версия");
+                        }
+                        crate::update::UpdateState::Available(r) => {
+                            ui.colored_label(p.ok, format!("· доступна {}", r.version));
+                        }
+                        crate::update::UpdateState::Failed(e) => {
+                            ui.colored_label(p.err, format!("· {e}"));
+                        }
+                        _ => {}
+                    }
+                    if ui.add_enabled(!matches!(state, crate::update::UpdateState::Checking | crate::update::UpdateState::Installing), egui::Button::new("Проверить сейчас")).clicked() {
+                        let sh = shared.clone();
+                        std::thread::spawn(move || crate::update::check_now(&sh));
+                    }
+                });
+                ui.label(theme::dim(ui, "Единственный сетевой запрос Strela — к api.github.com (последний релиз); отправляются только название программы и версия. Файл скачивается с GitHub и сверяется с SHA256SUMS.txt."));
+            });
+            ui.add_space(10.0);
             // ---- startup & Explorer integration
             theme::card(ui).show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -349,7 +380,7 @@ impl PrefsTab {
                 ui.set_width(ui.available_width());
                 theme::heading(ui, "О программе");
                 ui.label(format!("Strela {} — быстрые файловые операции для Windows", env!("CARGO_PKG_VERSION")));
-                ui.label(theme::dim(ui, "Никакой телеметрии, никаких сетевых запросов."));
+                ui.label(theme::dim(ui, "Никакой телеметрии. Единственный сетевой запрос — проверка обновлений на GitHub (настройка выше)."));
                 ui.hyperlink_to("Исходный код и релизы на GitHub", winint::REPO_URL);
                 ui.label(theme::dim(ui, format!("Данные программы: {}", crate::settings::dir().display())));
             });

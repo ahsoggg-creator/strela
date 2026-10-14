@@ -80,6 +80,7 @@ pub struct Shared {
     pub quitting: AtomicBool,
     /// The elevated window of the system tools: no tray, no hotkey, no indexer, no job queue of its own.
     pub admin: bool,
+    pub update: Mutex<crate::update::UpdateState>,
 }
 
 impl Shared {
@@ -107,6 +108,7 @@ impl Shared {
             hotkey_error: Mutex::new(None),
             quitting: AtomicBool::new(false),
             admin,
+            update: Mutex::new(Default::default()),
         })
     }
 
